@@ -23,7 +23,7 @@ class ObjectTransform{
             right = {1, 0, 0};
         }
 
-        void Rotate(){
+        void ApplyRotation(){
             float pitch = rotation.x;
             float yaw = rotation.y;
             float roll = rotation.z;
@@ -36,6 +36,10 @@ class ObjectTransform{
             forward = Vector3Transform({0, 0, 1}, rotationMat);
             up = Vector3Transform({0, 1, 0}, rotationMat);
             right = Vector3Transform({1, 0, 0}, rotationMat);
+        }
+
+        void moveInDirection(Vector3 direction, float step){
+            position = Vector3Add(position, Vector3Scale(direction, step*GetFrameTime()));
         }
 };
 
@@ -62,11 +66,13 @@ class object{
 class camera{
     public:
         ObjectTransform transform;
+        float nearClipPlane;
         float fieldOfView;
-        camera(Vector3 pos, Vector3 rot, float fov){
+        camera(Vector3 pos, Vector3 rot, float fov, float ncp){
             transform.position = pos;
             transform.rotation = rot;
             fieldOfView = fov;
+            nearClipPlane = ncp;
         }
 };
 
@@ -105,15 +111,14 @@ Vector3 toWorldSpace(Vector3 vertex, object obj){
 
     Vector3 rotatedVertex = RotateByBasisVectors(scaledVertex, trnsfrm);
 
-    Vector3 worldPos = Vector3Transform(rotatedVertex, MatrixTranslate(trnsfrm.position.x, trnsfrm.position.y, trnsfrm.position.z));
+    Vector3 worldPos = Vector3Add(rotatedVertex, obj.transform.position);
     return worldPos;
 }
 
 Vector3 toViewSpace(Vector3 vertex, object obj, camera cam){
     Vector3 worldVert = toWorldSpace(vertex, obj);
 
-    Vector3 inverseCamPos = Vector3Scale(cam.transform.position, -1);
-    Vector3 TranslatedVertex = Vector3Transform(worldVert, MatrixTranslate(inverseCamPos.x, inverseCamPos.y, inverseCamPos.z));
+    Vector3 TranslatedVertex = Vector3Subtract(worldVert, cam.transform.position);
 
     Vector3 viewPos = RotateByInverseBasisVectors(TranslatedVertex, cam.transform);
     return viewPos;
@@ -147,7 +152,7 @@ bool pointInTriangle(Vector2 point, Vector2 triangle[]){
     return (A && B && C);
 }
 
-void fillTriangle(Vector2 triangle[], Color (&colorBuffer)[480][640]){
+void fillTriangle(Vector2 triangle[], Color (&colorBuffer)[480][640], Color triangleColor){
     int bounding_box[4];
     float screenHeight = GetScreenHeight();
     float screenWidth = GetScreenWidth();
@@ -165,7 +170,7 @@ void fillTriangle(Vector2 triangle[], Color (&colorBuffer)[480][640]){
     for (int py=bounding_box[0]; py<=bounding_box[1]; py++){
         for (int px=bounding_box[2]; px<=bounding_box[3]; px++){
             if (pointInTriangle({(float)px, (float)py}, triangle)){
-                colorBuffer[py][px] = GREEN;
+                colorBuffer[py][px] = triangleColor;
             }
         }
     }
@@ -184,19 +189,19 @@ int main(){
     Color BACKGROUND = {25, 25, 35, 255};
     Color colorBuffer[480][640] = {};
 
-    camera cam({0, 0, 0}, {0, 0, 0}, 90*DEG2RAD);
+    camera cam({0, 0, 0}, {0, 0, 0}, 90*DEG2RAD, 0.1f);
 
     //mesh info
     object plane({0, -0.5, 2}, {0, 0, 0}, {1, 1, 1});
     plane.set_vertices({
         {-1, 0, 1},
         {1, 0, 1},
-        {-1, 0, 0},
-        {1, 0, 0}
+        {-1, 0, -1},
+        {1, 0, -1}
     });
     plane.set_indices({
         {2, 1, 0},
-        {1, 2, 3}
+        //{1, 2, 3}
     });
 
     vector<object> objects = {plane};
@@ -211,21 +216,21 @@ int main(){
                     colorBuffer[y][x] = BACKGROUND;
 
         if (IsKeyDown(KEY_W)){
-            cam.transform.position.z += 3 * GetFrameTime();
+            cam.transform.moveInDirection(cam.transform.forward, 3.0f);
         }if (IsKeyDown(KEY_S)){
-            cam.transform.position.z -= 3 * GetFrameTime();
+            cam.transform.moveInDirection(cam.transform.forward, -3.0f);
         }if (IsKeyDown(KEY_A)){
-            cam.transform.position.x -= 3 * GetFrameTime();
+            cam.transform.moveInDirection(cam.transform.right, -3.0f);
         }if (IsKeyDown(KEY_D)){
-            cam.transform.position.x += 3 * GetFrameTime();
+            cam.transform.moveInDirection(cam.transform.right, 3.0f);
         }
 
         cam.transform.rotation.y += GetMouseDelta().x * 0.01;
         cam.transform.rotation.x += GetMouseDelta().y * 0.01;
-        cam.transform.Rotate();
+        cam.transform.ApplyRotation();
 
         for (object obj : objects){
-            obj.transform.Rotate();
+            obj.transform.ApplyRotation();
             for (Vector3 inds: obj.indices){           
                 Vector3 v1 = toViewSpace(obj.vertices[(int)inds.x], obj, cam);
                 Vector3 v2 = toViewSpace(obj.vertices[(int)inds.y], obj, cam);
@@ -265,8 +270,8 @@ int main(){
                         C = v2;
                     }
 
-                    float ABt = -A.z / (B.z - A.z);
-                    float ACt = -A.z / (C.z - A.z);
+                    float ABt = (cam.nearClipPlane - A.z) / (B.z - A.z);
+                    float ACt = (cam.nearClipPlane - A.z) / (C.z - A.z);
 
                     Vector3 AB = Vector3Lerp(A, B, ABt);
                     Vector3 AC = Vector3Lerp(A, C, ACt);
@@ -277,7 +282,7 @@ int main(){
                         toScreenSpace(A, cam.fieldOfView),
                     };
 
-                    fillTriangle(triangle, colorBuffer);
+                    fillTriangle(triangle, colorBuffer, GREEN);
                 }else if (insideVertices == 2){
                     Vector3 A;
                     Vector3 B;
@@ -296,32 +301,32 @@ int main(){
                         C = v2;
                     }
 
-                    float CAt = -A.z / (C.z - A.z);
-                    float BAt = -A.z / (B.z - A.z);
+                    float ACt = (cam.nearClipPlane - A.z) / (C.z - A.z);
+                    float ABt = (cam.nearClipPlane - A.z) / (B.z - A.z);
 
-                    Vector3 AC = Vector3Lerp(A, C, CAt);
-                    Vector3 AB = Vector3Lerp(A, B, BAt);
+                    Vector3 AC = Vector3Lerp(A, C, ACt);
+                    Vector3 AB = Vector3Lerp(A, B, ABt);
 
                     Vector2 triangle1[3] = {
-                        toScreenSpace(B, cam.fieldOfView),
                         toScreenSpace(C, cam.fieldOfView),
+                        toScreenSpace(B, cam.fieldOfView),
                         toScreenSpace(AB, cam.fieldOfView),
                     };
                     Vector2 triangle2[3] = {
-                        toScreenSpace(C, cam.fieldOfView),
                         toScreenSpace(AB, cam.fieldOfView),
                         toScreenSpace(AC, cam.fieldOfView),
+                        toScreenSpace(C, cam.fieldOfView),
                     };
 
-                    fillTriangle(triangle1, colorBuffer);
-                    fillTriangle(triangle2, colorBuffer);
+                    fillTriangle(triangle1, colorBuffer, GREEN);
+                    fillTriangle(triangle2, colorBuffer, GREEN);
                 }else{
                     Vector2 triangle[3] = {
                         toScreenSpace(v3, cam.fieldOfView),
                         toScreenSpace(v2, cam.fieldOfView),
                         toScreenSpace(v1, cam.fieldOfView),
                     };
-                    fillTriangle(triangle, colorBuffer);
+                    fillTriangle(triangle, colorBuffer, GREEN);
                 }
             }
         }
