@@ -48,10 +48,18 @@ class object{
         vector<Vector3> vertices = {};
         vector<Vector3> indices = {};
         ObjectTransform transform;
-        object(Vector3 pos, Vector3 rot, Vector3 scl){
+        Color color;
+        object(Vector3 pos, Vector3 rot, Vector3 scl, Color col){
             transform.position = pos;
             transform.rotation = rot;
             transform.scale = scl;
+            color = col;
+        };
+
+        object(){
+            transform.position = {0, 0, 0};
+            transform.rotation = {0, 0, 0};
+            transform.scale = {1, 1, 1};
         };
 
         void set_vertices(vector<Vector3> verts){
@@ -62,6 +70,58 @@ class object{
             indices = inds;
         }
 };
+
+object Cube(Vector3 pos, Vector3 rot, Vector3 scl, Color col){
+    object cube{pos, rot, scl, col};
+    cube.set_vertices(
+        {{-1, 1, 1},
+        {1, 1, 1},
+        {1, -1, 1},
+        {-1, -1, 1},
+        
+        {1, 1, -1},
+        {-1, 1, -1},
+        {-1, -1, -1}, 
+        {1, -1, -1}});
+
+    cube.set_indices(
+        {{2, 1, 0},
+        {3, 2, 0},
+
+        {6, 5, 4},
+        {7, 6, 4},
+
+        {7, 4, 1},
+        {2, 7, 1},
+
+        {3, 0, 5},
+        {6, 3, 5},
+
+        {1, 4, 5},
+        {0, 1, 5},
+
+        {7, 2, 3},
+        {6, 7, 3}}
+    );
+    return cube;
+}
+
+object Plane(Vector3 pos, Vector3 rot, Vector3 scl, Color col){
+    object plane(pos, rot, scl, col);
+    plane.set_vertices({
+        {-1, 0, 1},
+        {1, 0, 1},
+        {-1, 0, -1},
+        {1, 0, -1}
+    });
+
+    plane.set_indices({
+        {2, 1, 0},
+        {1, 2, 3}
+    });
+
+    return plane;
+}
 
 class camera{
     public:
@@ -189,22 +249,14 @@ int main(){
     Color BACKGROUND = {25, 25, 35, 255};
     Color colorBuffer[480][640] = {};
 
-    camera cam({0, 0, 0}, {0, 0, 0}, 90*DEG2RAD, 0.1f);
+    camera cam({0, 2, -2}, {0, 0, 0}, 90*DEG2RAD, 0.1f);
 
     //mesh info
-    object plane({0, -0.5, 2}, {0, 0, 0}, {1, 1, 1});
-    plane.set_vertices({
-        {-1, 0, 1},
-        {1, 0, 1},
-        {-1, 0, -1},
-        {1, 0, -1}
-    });
-    plane.set_indices({
-        {2, 1, 0},
-        //{1, 2, 3}
-    });
+    object plane = Plane({0, 0, 0}, {0, 0, 0}, {2, 2, 2}, GRAY);
 
-    vector<object> objects = {plane};
+    object cube = Cube({0, 2, 0}, {0, 0, 0}, {1, 1, 1}, RED);
+
+    vector<object> objects = {plane, cube};
 
     Image img = GenImageColor(screenWidth, screenHeight, BACKGROUND);
     Texture2D tex = LoadTextureFromImage(img);
@@ -238,9 +290,9 @@ int main(){
 
                 int insideVertices = 0;
 
-                bool v1In = (v1.z > 0);
-                bool v2In = (v2.z > 0);
-                bool v3In = (v3.z > 0);
+                bool v1In = (v1.z > cam.nearClipPlane);
+                bool v2In = (v2.z > cam.nearClipPlane);
+                bool v3In = (v3.z > cam.nearClipPlane);
 
                 if (v1In){
                     insideVertices++;
@@ -282,7 +334,7 @@ int main(){
                         toScreenSpace(A, cam.fieldOfView),
                     };
 
-                    fillTriangle(triangle, colorBuffer, GREEN);
+                    fillTriangle(triangle, colorBuffer, obj.color);
                 }else if (insideVertices == 2){
                     Vector3 A;
                     Vector3 B;
@@ -318,15 +370,15 @@ int main(){
                         toScreenSpace(C, cam.fieldOfView),
                     };
 
-                    fillTriangle(triangle1, colorBuffer, GREEN);
-                    fillTriangle(triangle2, colorBuffer, GREEN);
+                    fillTriangle(triangle1, colorBuffer, obj.color);
+                    fillTriangle(triangle2, colorBuffer, obj.color);
                 }else{
                     Vector2 triangle[3] = {
                         toScreenSpace(v3, cam.fieldOfView),
                         toScreenSpace(v2, cam.fieldOfView),
                         toScreenSpace(v1, cam.fieldOfView),
                     };
-                    fillTriangle(triangle, colorBuffer, GREEN);
+                    fillTriangle(triangle, colorBuffer, obj.color);
                 }
             }
         }
