@@ -1,0 +1,7 @@
+{
+    "name": "my-raylib-game",
+    "version-string": "0.1.0",
+    "dependencies": [
+        "raylib"
+    ]
+}

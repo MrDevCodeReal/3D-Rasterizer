@@ -24,6 +24,9 @@ class ObjectTransform{
         }
 
         void ApplyRotation(){
+            if (rotation.x >= 360) rotation.x = (int)rotation.x % 360;
+            if (rotation.y >= 360) rotation.y = (int)rotation.y % 360;
+            if (rotation.z >= 360) rotation.z = (int)rotation.z % 360;
             float pitch = rotation.x;
             float yaw = rotation.y;
             float roll = rotation.z;
@@ -85,23 +88,23 @@ object Cube(Vector3 pos, Vector3 rot, Vector3 scl, Color col){
         {1, -1, -1}});
 
     cube.set_indices(
-        {{2, 1, 0},
-        {3, 2, 0},
+        {{0, 1, 2},
+        {0, 2, 3},
 
-        {6, 5, 4},
-        {7, 6, 4},
+        {4, 5, 6},
+        {4, 6, 7},
 
-        {7, 4, 1},
-        {2, 7, 1},
+        {1, 4, 7},
+        {1, 7, 2},
 
-        {3, 0, 5},
-        {6, 3, 5},
+        {5, 0, 3},
+        {5, 3, 6},
 
-        {1, 4, 5},
-        {0, 1, 5},
+        {5, 4, 1},
+        {5, 1, 0},
 
-        {7, 2, 3},
-        {6, 7, 3}}
+        {3, 2, 7},
+        {3, 7, 6}}
     );
     return cube;
 }
@@ -247,14 +250,14 @@ int main(){
     DisableCursor();
 
     Color BACKGROUND = {25, 25, 35, 255};
-    Color colorBuffer[480][640] = {};
+    static Color colorBuffer[480][640] = {};
 
     camera cam({0, 2, -2}, {0, 0, 0}, 90*DEG2RAD, 0.1f);
 
     //mesh info
     object plane = Plane({0, 0, 0}, {0, 0, 0}, {2, 2, 2}, GRAY);
 
-    object cube = Cube({0, 2, 0}, {0, 0, 0}, {1, 1, 1}, RED);
+    object cube = Cube({0, 2, 0}, {0, 0, 0}, {1, 1, 1}, {255, 0, 0, 155});
 
     vector<object> objects = {plane, cube};
 
@@ -279,6 +282,7 @@ int main(){
 
         cam.transform.rotation.y += GetMouseDelta().x * 0.01;
         cam.transform.rotation.x += GetMouseDelta().y * 0.01;
+        cam.transform.rotation.x = Clamp(cam.transform.rotation.x, -90 * DEG2RAD, 90 * DEG2RAD);
         cam.transform.ApplyRotation();
 
         for (object obj : objects){
@@ -386,6 +390,7 @@ int main(){
         UpdateTexture(tex, colorBuffer);
 
 		BeginDrawing();
+        ClearBackground(BLACK);
         DrawTexture(tex, 0, 0, WHITE);
 		EndDrawing();
 	}
